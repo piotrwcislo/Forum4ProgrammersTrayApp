@@ -45,7 +45,7 @@ namespace Forum4Programmers.Client
                             latestTopics.Add(topic);
                         }
                     }
-                    uri = new Uri(topicsResponse.Navigation.NextPage);
+                    uri = new Uri(topicsResponse.Navigation.NextPage + "&sort=last_post_id");
                 }
             }
 
