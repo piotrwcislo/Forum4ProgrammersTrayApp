@@ -7,7 +7,7 @@
     <ProjectGuid>{AAF1C4DC-A584-432B-A8AE-A83CFF7403FE}</ProjectGuid>
     <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>Forum4ProgrammersClient</RootNamespace>
+    <RootNamespace>Forum4Programmers.Client</RootNamespace>
     <AssemblyName>Forum4ProgrammersClient</AssemblyName>
     <TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
@@ -44,17 +44,23 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Contracts\IPostClient.cs" />
+    <Compile Include="Contracts\ITopicClient.cs" />
     <Compile Include="Model\PageNavigation.cs" />
     <Compile Include="Model\TopicResponse.cs" />
     <Compile Include="PageNavigation.cs" />
+    <Compile Include="Model\Post.cs" />
+    <Compile Include="PostClient.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Model\Topic.cs" />
     <Compile Include="TopicClient.cs" />
     <Compile Include="TopicPrinter.cs" />
     <Compile Include="Model\Forum.cs" />
+    <Compile Include="Model\User.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
   </ItemGroup>
+  <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

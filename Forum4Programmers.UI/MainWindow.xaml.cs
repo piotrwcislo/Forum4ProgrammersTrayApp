@@ -1,7 +1,9 @@
 ﻿using Forum4Programmers.Client;
+using Forum4Programmers.Client.Contracts;
 using Forum4Programmers.Client.Model;
 using System;
 using System.Collections.Generic;
+using System.Configuration;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
@@ -15,13 +17,18 @@ namespace Forum4Programmers.UI
 {
     public partial class MainWindow : Window
     {
+        private readonly TimeSpan _checkInterval = TimeSpan.FromMinutes(15);
         private readonly NotifyIcon _notifyIcon;
         private readonly ToolStripItemCollection _contextMenuItems;
-        private readonly TopicClient _client = new TopicClient();
-        private TimeSpan _checkInterval = TimeSpan.FromMinutes(15);
 
-        public MainWindow()
+        private readonly ITopicClient _topicClient;
+        private readonly IPostClient _postClient;
+
+        public MainWindow(ITopicClient topicClient, IPostClient postClient)
         {
+            _topicClient = topicClient;
+            _postClient = postClient;
+
             InitializeComponent();
             ShowInTaskbar = false;
 
@@ -50,7 +57,7 @@ namespace Forum4Programmers.UI
         {
             try
             {
-                List<Topic> lastTopics = await _client.GetLatestTopics(10, forumId: 52);
+                List<Topic> lastTopics = await _topicClient.GetLastTopicsByLastPostCreatedAt(10, forumId: 52);
                 onTopicsChecked?.Invoke(lastTopics);
             }
             catch (Exception)
@@ -75,11 +82,19 @@ namespace Forum4Programmers.UI
             _notifyIcon.Text = $"Odświeżono o {DateTime.Now.ToShortTimeString()}";
         }
 
-        private void ShowBalloonTipIfAnyNew(IOrderedEnumerable<Topic> lastTopics)
+        private async Task ShowBalloonTipIfAnyNew(IOrderedEnumerable<Topic> lastTopics)
         {
-            if (lastTopics.Any(topic => (DateTime.Now - topic.LastPostCreatedAt) < _checkInterval))
+            var newTopics = lastTopics.Where(topic => (DateTime.Now - topic.LastPostCreatedAt) < _checkInterval);
+            string userName = ConfigurationManager.AppSettings["UserName"];
+            if (!string.IsNullOrEmpty(userName))
             {
-                Topic mostRecent = lastTopics.First();
+                IEnumerable<Post> newTopicsPosts = await Task.WhenAll(newTopics.Select(async topic => await _postClient.GetPostById(topic.LastPostId)));
+                newTopics = newTopics.Where(topic => !newTopicsPosts.Any(post => post.TopicId == topic.Id && post.User.Name == userName));
+            }
+
+            if (newTopics.Any())
+            {
+                Topic mostRecent = newTopics.First();
                 _notifyIcon.ShowBalloonTip(1, "Nowe posty", mostRecent.Subject, ToolTipIcon.Info);
             }
         }

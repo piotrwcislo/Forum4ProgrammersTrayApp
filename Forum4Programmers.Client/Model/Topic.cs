@@ -15,6 +15,9 @@ namespace Forum4Programmers.Client.Model
         [JsonProperty("created_at")]
         public DateTime CreatedAt { get; set; }
 
+        [JsonProperty("last_post_id")]
+        public int LastPostId { get; set; }
+
         [JsonProperty("last_post_created_at")]
         public DateTime LastPostCreatedAt { get; set; }
 
