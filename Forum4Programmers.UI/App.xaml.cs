@@ -12,6 +12,9 @@ namespace Forum4Programmers.UI
             var container = new UnityContainer();
             container.RegisterType<IPostClient, PostClient>();
             container.RegisterType<ITopicClient, TopicClient>();
+
+            MainWindow mainWindow = container.Resolve<MainWindow>();
+            mainWindow.Show();
         }
     }
 }
