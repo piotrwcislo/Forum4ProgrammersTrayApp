@@ -11,6 +11,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Forms;
+using Forum4Programmers.TrayApp.Configuration;
 using Application = System.Windows.Application;
 
 namespace Forum4Programmers.UI
@@ -26,6 +27,8 @@ namespace Forum4Programmers.UI
 
         public MainWindow(ITopicClient topicClient, IPostClient postClient)
         {
+
+            List<ForumConfigElement> forumsConfig = ForumConfigurationSection.GetForumConfiguration().Forums.ToList();
             _topicClient = topicClient;
             _postClient = postClient;
 
@@ -84,7 +87,7 @@ namespace Forum4Programmers.UI
 
         private async Task ShowBalloonTipIfAnyNew(IOrderedEnumerable<Topic> lastTopics)
         {
-            var newTopics = lastTopics.Where(topic => (DateTime.Now - topic.LastPostCreatedAt) < _checkInterval);
+            IEnumerable<Topic> newTopics = lastTopics.Where(topic => topic.IsNewerThan(DateTime.Now - _checkInterval));
             string userName = ConfigurationManager.AppSettings["UserName"];
             if (!string.IsNullOrEmpty(userName))
             {

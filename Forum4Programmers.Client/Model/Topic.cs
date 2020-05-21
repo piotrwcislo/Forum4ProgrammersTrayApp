@@ -22,5 +22,7 @@ namespace Forum4Programmers.Client.Model
         public DateTime LastPostCreatedAt { get; set; }
 
         public Forum Forum { get; set; }
+
+        public bool IsNewerThan(DateTime dateTime) => LastPostCreatedAt > dateTime;
     }
 }
