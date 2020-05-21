@@ -78,6 +78,8 @@
     <Compile Include="Configuration\ForumConfigElement.cs" />
     <Compile Include="Configuration\ForumConfigurationSection.cs" />
     <Compile Include="Configuration\ForumsCollection.cs" />
+    <Compile Include="Configuration\RefreshIntervalConfigElement.cs" />
+    <Compile Include="Configuration\UserConfigElement.cs" />
     <Compile Include="MainWindow.xaml.cs">
       <DependentUpon>MainWindow.xaml</DependentUpon>
       <SubType>Code</SubType>

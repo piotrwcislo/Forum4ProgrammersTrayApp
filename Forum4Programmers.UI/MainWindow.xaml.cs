@@ -3,7 +3,6 @@ using Forum4Programmers.Client.Contracts;
 using Forum4Programmers.Client.Model;
 using System;
 using System.Collections.Generic;
-using System.Configuration;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
@@ -18,17 +17,21 @@ namespace Forum4Programmers.UI
 {
     public partial class MainWindow : Window
     {
-        private readonly TimeSpan _checkInterval = TimeSpan.FromMinutes(15);
+        private const int LastTopicsToGetCount = 5;
         private readonly NotifyIcon _notifyIcon;
         private readonly ToolStripItemCollection _contextMenuItems;
 
         private readonly ITopicClient _topicClient;
         private readonly IPostClient _postClient;
 
+        private readonly ForumConfigurationSection _configuration;
+        private readonly IEnumerable<ForumConfigElement> _forumsToCheck;
+
         public MainWindow(ITopicClient topicClient, IPostClient postClient)
         {
+            _configuration = ForumConfigurationSection.GetForumConfiguration();
+            _forumsToCheck = _configuration.Forums.Where(forumConfig => forumConfig.Enabled);
 
-            List<ForumConfigElement> forumsConfig = ForumConfigurationSection.GetForumConfiguration().Forums.ToList();
             _topicClient = topicClient;
             _postClient = postClient;
 
@@ -38,29 +41,29 @@ namespace Forum4Programmers.UI
             _notifyIcon = new NotifyIcon();
             Stream iconStream = Application.GetResourceStream(new Uri("pack://application:,,,/icon.ico")).Stream;
             _notifyIcon.Icon = new Icon(iconStream);
-
             _notifyIcon.Visible = true;
             _notifyIcon.ContextMenuStrip = new ContextMenuStrip();
             _contextMenuItems = _notifyIcon.ContextMenuStrip.Items;
             _notifyIcon.MouseUp += (_, __) => _notifyIcon.ContextMenuStrip.Show(Control.MousePosition);
             _notifyIcon.BalloonTipClicked += (_, __) => _notifyIcon.ContextMenuStrip.Show(Control.MousePosition);
-            CheckForNewTopicsAsync(_checkInterval, OnTopicsChecked);
+            CheckForNewTopicsAsync( OnTopicsChecked);
         }
 
-        private async Task CheckForNewTopicsAsync(TimeSpan checkInterval, Action<IEnumerable<Topic>> onTopicsChecked)
+        private async Task CheckForNewTopicsAsync(Action<IEnumerable<List<Topic>>> onTopicsChecked)
         {
             while (true)
             {
                 await RefreshLatestTopics(onTopicsChecked);
-                await Task.Delay(checkInterval);
+                await Task.Delay(_configuration.RefreshInterval.Interval);
             }
         }
 
-        private async Task RefreshLatestTopics(Action<IEnumerable<Topic>> onTopicsChecked)
+        private async Task RefreshLatestTopics(Action<IEnumerable<List<Topic>>> onTopicsChecked)
         {
             try
             {
-                List<Topic> lastTopics = await _topicClient.GetLastTopicsByLastPostCreatedAt(10, forumId: 52);
+                IEnumerable<List<Topic>> lastTopics = await Task.WhenAll(_forumsToCheck.Select(forum
+                    => _topicClient.GetLastTopicsByLastPostCreatedAt(LastTopicsToGetCount, forum.Id)));
                 onTopicsChecked?.Invoke(lastTopics);
             }
             catch (Exception)
@@ -69,30 +72,33 @@ namespace Forum4Programmers.UI
             }
         }
 
-        private void OnTopicsChecked(IEnumerable<Topic> lastTopics)
+        private async void OnTopicsChecked(IEnumerable<List<Topic>> lastTopicsByForum)
         {
             UpdateRefreshedAtText();
-            if (lastTopics != null && lastTopics.Count() > 0)
-            {
-                var topicsByLastPostCreatedAt = lastTopics.OrderByDescending(topic => topic.LastPostCreatedAt);
-                ShowBalloonTipIfAnyNew(topicsByLastPostCreatedAt);
-                UpdateContextMenuItems(topicsByLastPostCreatedAt);
-            }
-        }
+            ClearContextMenu();
+            InsertTopContextMenuItems();
 
-        private void UpdateRefreshedAtText()
-        {
-            _notifyIcon.Text = $"Odświeżono o {DateTime.Now.ToShortTimeString()}";
+            var allTopics = new List<Topic>();
+            foreach (List<Topic> lastTopics in lastTopicsByForum)
+            {
+                if (lastTopics != null && lastTopics.Any())
+                {
+                    IOrderedEnumerable<Topic> topicsByLastPostCreatedAt = lastTopics.OrderByDescending(topic => topic.LastPostCreatedAt);
+                    UpdateContextMenuItems(topicsByLastPostCreatedAt);
+                    allTopics.AddRange(topicsByLastPostCreatedAt);
+                }
+            }
+            InsertBottomContextMenuItems();
+            await ShowBalloonTipIfAnyNew(allTopics.OrderBy(t => t.LastPostCreatedAt));
         }
 
         private async Task ShowBalloonTipIfAnyNew(IOrderedEnumerable<Topic> lastTopics)
         {
-            IEnumerable<Topic> newTopics = lastTopics.Where(topic => topic.IsNewerThan(DateTime.Now - _checkInterval));
-            string userName = ConfigurationManager.AppSettings["UserName"];
-            if (!string.IsNullOrEmpty(userName))
+            IEnumerable<Topic> newTopics = lastTopics.Where(topic => topic.IsNewerThan(DateTime.Now - _configuration.RefreshInterval.Interval));
+            if (!string.IsNullOrEmpty(_configuration.User.UserName))
             {
                 IEnumerable<Post> newTopicsPosts = await Task.WhenAll(newTopics.Select(async topic => await _postClient.GetPostById(topic.LastPostId)));
-                newTopics = newTopics.Where(topic => !newTopicsPosts.Any(post => post.TopicId == topic.Id && post.User.Name == userName));
+                newTopics = newTopics.Where(topic => !newTopicsPosts.Any(post => post.TopicId == topic.Id && post.User.Name == _configuration.User.UserName));
             }
 
             if (newTopics.Any())
@@ -104,9 +110,6 @@ namespace Forum4Programmers.UI
 
         private void UpdateContextMenuItems(IOrderedEnumerable<Topic> lastTopics)
         {
-            _contextMenuItems.Clear();
-            _contextMenuItems.Add("Odśwież", null, async (_, __) => await RefreshLatestTopics(OnTopicsChecked));
-            _contextMenuItems.Add(new ToolStripSeparator());
             lastTopics.ToList().ForEach(topic =>
             {
                 ToolStripItem newItem = _contextMenuItems.Add(TopicPrinter.PrintShort(topic), null, (_, __) => Process.Start(topic.Url));
@@ -117,7 +120,27 @@ namespace Forum4Programmers.UI
                 }
             });
             _contextMenuItems.Add(new ToolStripSeparator());
+        }
+
+        private void InsertBottomContextMenuItems()
+        {
             _contextMenuItems.Add("Zamknij", null, (_, __) => Application.Current.Shutdown());
+        }
+
+        private void InsertTopContextMenuItems()
+        {
+            _contextMenuItems.Add("Odśwież", null, async (_, __) => await RefreshLatestTopics(OnTopicsChecked));
+            _contextMenuItems.Add(new ToolStripSeparator());
+        }
+
+        private void ClearContextMenu()
+        {
+            _contextMenuItems.Clear();
+        }
+
+        private void UpdateRefreshedAtText()
+        {
+            _notifyIcon.Text = $"Odświeżono o {DateTime.Now.ToShortTimeString()}";
         }
     }
 }
